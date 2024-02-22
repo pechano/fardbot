@@ -20,9 +20,43 @@ func init() {
 }
 
 var token string
-var buffer = make([][]byte, 0)
+var fardbuffer [][]byte
+var toiletbuffer [][]byte
+var bowelbuffer = make([][]byte, 0)
+var devmode bool
+var farding bool
+var playsoundchannel chan channelinfo
+var stoploop chan bool
+
+type soundcollection struct {
+	sound []sound
+}
+
+type sound struct {
+	trigger string
+	buffer  [][]byte
+}
+
+type channelinfo struct {
+	s         *discordgo.Session
+	guildID   *discordgo.Guild
+	channelID *discordgo.Channel
+	author    *discordgo.MessageCreate
+	trigger   string
+}
+
+var sounds soundcollection
 
 func main() {
+
+	playsoundchannel = make(chan channelinfo)
+	stoploop = make(chan bool)
+
+	sounds.LoadSound("fard.dca", "!fard")
+	sounds.LoadSound("bowel.dca", "!bowel")
+	toiletbuffer = LoadDCA("toilet.dca")
+
+	devmode = true
 
 	if token == "" {
 		fmt.Println("No token provided. Please run: airhorn -t <bot token>")
@@ -30,11 +64,6 @@ func main() {
 	}
 
 	// Load the sound file.
-	err := loadSound()
-	if err != nil {
-		fmt.Println("Error loading sound: ", err)
-		return
-	}
 
 	// Create a new Discord session using the provided bot token.
 	dg, err := discordgo.New("Bot " + token)
@@ -72,59 +101,99 @@ func main() {
 	dg.Close()
 }
 
-// This function will be called (due to AddHandler above) when the bot receives
-// the "ready" event from Discord.
-func ready(s *discordgo.Session, event *discordgo.Ready) {
-
-	// Set the playing status.
-	s.UpdateGameStatus(0, "!fard")
-}
-
 // This function will be called (due to AddHandler above) every time a new
 // message is created on any channel that the autenticated bot has access to.
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
-
-	// Ignore all messages created by the bot itself
-	// This isn't required in this specific example but it's a good practice.
-	if m.Author.ID == s.State.User.ID {
-		return
-	}
-
-	// check if the message is "!fard"
-	if strings.HasPrefix(m.Content, "!fard") {
-
-		// Find the channel that the message came from.
-		c, err := s.State.Channel(m.ChannelID)
-		fmt.Println("joining " + m.ChannelID)
-		if err != nil {
-			// Could not find channel.
-			fmt.Println(err)
+	if farding == false {
+		// Ignore all messages created by the bot itself
+		// This isn't required in this specific example but it's a good practice.
+		if m.Author.ID == s.State.User.ID {
 			return
 		}
 
-		// Find the guild for that channel.
-		g, err := s.State.Guild(c.GuildID)
-
-		fmt.Println(g)
-		if err != nil {
-			// Could not find guild.
-			fmt.Println(err)
-			return
+		if strings.HasPrefix(m.Content, "!stop") {
+			fmt.Println("stop signal received")
+			stoploop <- true
 		}
+		if strings.HasPrefix(m.Content, "!toilet") {
+			fmt.Println("toilet m8")
+			c, err := s.State.Channel(m.ChannelID)
+			fmt.Println("joining " + m.ChannelID)
+			if err != nil {
+				// Could not find channel.
+				fmt.Println(err)
+				return
+			}
 
-		// Look for the message sender in that guild's current voice states.
-		if err != nil {
-			fmt.Println(err)
+			// Find the guild for that channel.
+			g, err := s.State.Guild(c.GuildID)
+
+			fmt.Println(g)
+			if err != nil {
+				// Could not find guild.
+				fmt.Println(err)
+				return
+			}
+
+			// Look for the message sender in that guild's current voice states.
+			if err != nil {
+				fmt.Println(err)
+			}
+			for _, vs := range g.VoiceStates {
+				if vs.UserID == m.Author.ID {
+					*&farding = true
+					err = playLoop(toiletbuffer, s, g.ID, vs.ChannelID)
+					*&farding = false
+					fmt.Println("playing toilet sounds in " + vs.ChannelID)
+					if err != nil {
+						fmt.Println("Error playing sound:", err)
+					}
+
+					return
+				}
+			}
 		}
-		for _, vs := range g.VoiceStates {
-			if vs.UserID == m.Author.ID {
-				err = playSound(s, g.ID, vs.ChannelID)
-				fmt.Println("playing sound in " + vs.ChannelID)
+		for _, SoundOption := range sounds.sound {
+			// check if the message is "!fard"
+
+			if strings.HasPrefix(m.Content, SoundOption.trigger) {
+
+				// Find the channel that the message came from.
+				c, err := s.State.Channel(m.ChannelID)
+				fmt.Println("joining " + m.ChannelID)
 				if err != nil {
-					fmt.Println("Error playing sound:", err)
+					// Could not find channel.
+					fmt.Println(err)
+					return
 				}
 
-				return
+				// Find the guild for that channel.
+				g, err := s.State.Guild(c.GuildID)
+
+				fmt.Println(g)
+				if err != nil {
+					// Could not find guild.
+					fmt.Println(err)
+					return
+				}
+
+				// Look for the message sender in that guild's current voice states.
+				if err != nil {
+					fmt.Println(err)
+				}
+				for _, vs := range g.VoiceStates {
+					if vs.UserID == m.Author.ID {
+						*&farding = true
+						err = playSound(SoundOption.buffer, s, g.ID, vs.ChannelID)
+						*&farding = false
+						fmt.Println("playing sound in " + vs.ChannelID)
+						if err != nil {
+							fmt.Println("Error playing sound:", err)
+						}
+
+						return
+					}
+				}
 			}
 		}
 	}
@@ -140,58 +209,18 @@ func guildCreate(s *discordgo.Session, event *discordgo.GuildCreate) {
 
 	for _, channel := range event.Guild.Channels {
 		if channel.ID == event.Guild.ID {
-			_, _ = s.ChannelMessageSend(channel.ID, "fardbot is ready! Type !fard while in a voice channel to play THE sound.")
+			if *&devmode == false {
+				_, _ = s.ChannelMessageSend(channel.ID, "fardbot is ready! Type !fard while in a voice channel to play THE sound.")
+			}
 			return
 		}
 	}
 }
 
 // loadSound attempts to load an encoded sound file from disk.
-func loadSound() error {
-
-	file, err := os.Open("fard.dca")
-	if err != nil {
-		fmt.Println("Error opening dca file :", err)
-		return err
-	}
-
-	var opuslen int16
-
-	for {
-		// Read opus frame length from dca file.
-		err = binary.Read(file, binary.LittleEndian, &opuslen)
-
-		// If this is the end of the file, just return.
-		if err == io.EOF || err == io.ErrUnexpectedEOF {
-			err := file.Close()
-			if err != nil {
-				return err
-			}
-			return nil
-		}
-
-		if err != nil {
-			fmt.Println("Error reading from dca file :", err)
-			return err
-		}
-
-		// Read encoded pcm from dca file.
-		InBuf := make([]byte, opuslen)
-		err = binary.Read(file, binary.LittleEndian, &InBuf)
-
-		// Should not be any end of file errors
-		if err != nil {
-			fmt.Println("Error reading from dca file :", err)
-			return err
-		}
-
-		// Append encoded pcm data to the buffer.
-		buffer = append(buffer, InBuf)
-	}
-}
 
 // playSound plays the current buffer to the provided channel.
-func playSound(s *discordgo.Session, guildID, channelID string) (err error) {
+func playSound(buffer [][]byte, s *discordgo.Session, guildID, channelID string) (err error) {
 
 	// Join the provided voice channel.
 	vc, err := s.ChannelVoiceJoin(guildID, channelID, false, true)
@@ -220,4 +249,213 @@ func playSound(s *discordgo.Session, guildID, channelID string) (err error) {
 	vc.Disconnect()
 
 	return nil
+}
+func playLoop(buffer [][]byte, s *discordgo.Session, guildID, channelID string) (err error) {
+	fmt.Println("loop function reporting in")
+	// Join the provided voice channel.
+	vc, err := s.ChannelVoiceJoin(guildID, channelID, false, true)
+	if err != nil {
+		return err
+	}
+
+	// Sleep for a specified amount of time before playing the sound
+	time.Sleep(250 * time.Millisecond)
+
+	// Start speaking.
+	vc.Speaking(true)
+
+	// Send the buffer data.
+	for i := 0; i < 10; i++ {
+		for _, buff := range buffer {
+			vc.OpusSend <- buff
+			if <-stoploop {
+				break
+			}
+		}
+
+	}
+
+	// Stop speaking
+	vc.Speaking(false)
+
+	// Sleep for a specificed amount of time before ending.
+	time.Sleep(250 * time.Millisecond)
+
+	// Disconnect from the provided voice channel.
+	vc.Disconnect()
+
+	return nil
+}
+
+func countdown(keepalive chan string, stopchannel chan string) {
+	timeLeft := 25 * time.Second
+	<-keepalive
+	time.Sleep(timeLeft)
+	stopchannel <- "stop"
+}
+func MSGlistener(s *discordgo.Session, m *discordgo.MessageCreate) {
+
+	// Ignore all messages created by the bot itself
+	// This isn't required in this specific example but it's a good practice.
+	if m.Author.ID == s.State.User.ID {
+		return
+	}
+
+	for _, SoundOption := range sounds.sound {
+
+		// check if the message is "!fard"
+		if strings.HasPrefix(m.Content, SoundOption.trigger) {
+
+			// Find the channel that the message came from.
+			c, err := s.State.Channel(m.ChannelID)
+			fmt.Println("joining " + m.ChannelID)
+			if err != nil {
+				// Could not find channel.
+				fmt.Println(err)
+				return
+			}
+
+			// Find the guild for that channel.
+			g, err := s.State.Guild(c.GuildID)
+
+			fmt.Println(g)
+			if err != nil {
+				// Could not find guild.
+				fmt.Println(err)
+				return
+			}
+			var packageinfo channelinfo
+			packageinfo.s = s
+			packageinfo.trigger = SoundOption.trigger
+			packageinfo.guildID = g
+			packageinfo.channelID = c
+			packageinfo.author = m
+			playsoundchannel <- packageinfo
+		}
+
+	}
+}
+
+func voicefard() {
+	for {
+		info := <-playsoundchannel
+
+		for _, SoundOption := range sounds.sound {
+			if info.trigger == SoundOption.trigger {
+
+				for _, vs := range info.guildID.VoiceStates {
+					if vs.UserID == info.author.Author.ID {
+						err := playSound(SoundOption.buffer, info.s, info.guildID.ID, vs.ChannelID)
+						fmt.Println("playing sound in " + vs.ChannelID)
+						check(err)
+					}
+
+				}
+			}
+		}
+
+	}
+}
+
+func (sc *soundcollection) LoadSound(path string, trigger string) {
+
+	var dca sound
+	dca.trigger = trigger
+	file, err := os.Open(path)
+	if err != nil {
+		fmt.Println("Error opening dca file :", err)
+		return
+	}
+
+	var opuslen int16
+
+	for {
+		// Read opus frame length from dca file.
+		err = binary.Read(file, binary.LittleEndian, &opuslen)
+
+		// If this is the end of the file, just return.
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
+			sc.sound = append(sc.sound, dca)
+			fmt.Println("done with the method, buffer length: ", len(dca.buffer))
+			err := file.Close()
+			check(err)
+			return
+		}
+
+		if err != nil {
+			fmt.Println("Error reading from dca file :", err)
+			return
+		}
+
+		// Read encoded pcm from dca file.
+		InBuf := make([]byte, opuslen)
+		err = binary.Read(file, binary.LittleEndian, &InBuf)
+
+		// Should not be any end of file errors
+		if err != nil {
+			fmt.Println("Error reading from dca file :", err)
+			return
+		}
+		// Append encoded pcm data to the buffer.
+
+		dca.buffer = append(dca.buffer, InBuf)
+	}
+}
+
+func LoadDCA(path string) (buffer [][]byte) {
+
+	file, err := os.Open(path)
+	if err != nil {
+		fmt.Println("Error opening dca file :", err)
+		return
+	}
+
+	var opuslen int16
+
+	for {
+		// Read opus frame length from dca file.
+		err = binary.Read(file, binary.LittleEndian, &opuslen)
+
+		// If this is the end of the file, just return.
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
+			fmt.Println("done with the method, buffer length: ", len(buffer))
+			err := file.Close()
+			check(err)
+			return
+		}
+
+		if err != nil {
+			fmt.Println("Error reading from dca file :", err)
+			return
+		}
+
+		// Read encoded pcm from dca file.
+		InBuf := make([]byte, opuslen)
+		err = binary.Read(file, binary.LittleEndian, &InBuf)
+
+		// Should not be any end of file errors
+		if err != nil {
+			fmt.Println("Error reading from dca file :", err)
+			return
+		}
+		// Append encoded pcm data to the buffer.
+
+		buffer = append(buffer, InBuf)
+	}
+}
+
+// This function will be called (due to AddHandler above) when the bot receives
+// the "ready" event from Discord.
+func ready(s *discordgo.Session, event *discordgo.Ready) {
+
+	// Set the playing status.
+	s.UpdateGameStatus(0, "!fard")
+}
+
+func check(e error) {
+
+	if e != nil {
+		fmt.Println("Error loading sound: ", e)
+		return
+	}
 }
