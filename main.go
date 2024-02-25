@@ -1,6 +1,5 @@
 package main
 
-//test
 import (
 	"encoding/binary"
 	"flag"
@@ -36,6 +35,7 @@ type soundcollection struct {
 type sound struct {
 	trigger string
 	buffer  [][]byte
+	loop    bool
 }
 
 type channelinfo struct {
@@ -53,9 +53,9 @@ func main() {
 	playsoundchannel = make(chan channelinfo)
 	stoploop = make(chan bool)
 
-	sounds.LoadSound("fard.dca", "!fard")
-	sounds.LoadSound("bowel.dca", "!bowel")
-	toiletbuffer = LoadDCA("toilet.dca")
+	sounds.LoadSound("fard.dca", "!fard", false)
+	sounds.LoadSound("bowel.dca", "!bowel", false)
+	sounds.LoadSound("toilet.dca", "!toilet", true)
 
 	devmode = true
 
@@ -72,12 +72,13 @@ func main() {
 		fmt.Println("Error creating Discord session: ", err)
 		return
 	}
+	go voicefard()
 
 	// Register ready as a callback for the ready events.
 	dg.AddHandler(ready)
 
 	// Register messageCreate as a callback for the messageCreate events.
-	dg.AddHandler(messageCreate)
+	dg.AddHandler(MSGlistener)
 
 	// Register guildCreate as a callback for the guildCreate events.
 	dg.AddHandler(guildCreate)
@@ -104,119 +105,6 @@ func main() {
 
 // This function will be called (due to AddHandler above) every time a new
 // message is created on any channel that the autenticated bot has access to.
-func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
-	if farding == false {
-		// Ignore all messages created by the bot itself
-		// This isn't required in this specific example but it's a good practice.
-		if m.Author.ID == s.State.User.ID {
-			return
-		}
-
-		if strings.HasPrefix(m.Content, "!stop") {
-			fmt.Println("stop signal received")
-			stoploop <- true
-		}
-		if strings.HasPrefix(m.Content, "!toilet") {
-			fmt.Println("toilet m8")
-			c, err := s.State.Channel(m.ChannelID)
-			fmt.Println("joining " + m.ChannelID)
-			if err != nil {
-				// Could not find channel.
-				fmt.Println(err)
-				return
-			}
-
-			// Find the guild for that channel.
-			g, err := s.State.Guild(c.GuildID)
-
-			fmt.Println(g)
-			if err != nil {
-				// Could not find guild.
-				fmt.Println(err)
-				return
-			}
-
-			// Look for the message sender in that guild's current voice states.
-			if err != nil {
-				fmt.Println(err)
-			}
-			for _, vs := range g.VoiceStates {
-				if vs.UserID == m.Author.ID {
-					*&farding = true
-					err = playLoop(toiletbuffer, s, g.ID, vs.ChannelID)
-					*&farding = false
-					fmt.Println("playing toilet sounds in " + vs.ChannelID)
-					if err != nil {
-						fmt.Println("Error playing sound:", err)
-					}
-
-					return
-				}
-			}
-		}
-		for _, SoundOption := range sounds.sound {
-			// check if the message is "!fard"
-
-			if strings.HasPrefix(m.Content, SoundOption.trigger) {
-
-				// Find the channel that the message came from.
-				c, err := s.State.Channel(m.ChannelID)
-				fmt.Println("joining " + m.ChannelID)
-				if err != nil {
-					// Could not find channel.
-					fmt.Println(err)
-					return
-				}
-
-				// Find the guild for that channel.
-				g, err := s.State.Guild(c.GuildID)
-
-				fmt.Println(g)
-				if err != nil {
-					// Could not find guild.
-					fmt.Println(err)
-					return
-				}
-
-				// Look for the message sender in that guild's current voice states.
-				if err != nil {
-					fmt.Println(err)
-				}
-				for _, vs := range g.VoiceStates {
-					if vs.UserID == m.Author.ID {
-						*&farding = true
-						err = playSound(SoundOption.buffer, s, g.ID, vs.ChannelID)
-						*&farding = false
-						fmt.Println("playing sound in " + vs.ChannelID)
-						if err != nil {
-							fmt.Println("Error playing sound:", err)
-						}
-
-						return
-					}
-				}
-			}
-		}
-	}
-}
-
-// This function will be called (due to AddHandler above) every time a new
-// guild is joined.
-func guildCreate(s *discordgo.Session, event *discordgo.GuildCreate) {
-
-	if event.Guild.Unavailable {
-		return
-	}
-
-	for _, channel := range event.Guild.Channels {
-		if channel.ID == event.Guild.ID {
-			if *&devmode == false {
-				_, _ = s.ChannelMessageSend(channel.ID, "fardbot is ready! Type !fard while in a voice channel to play THE sound.")
-			}
-			return
-		}
-	}
-}
 
 // loadSound attempts to load an encoded sound file from disk.
 
@@ -266,16 +154,19 @@ func playLoop(buffer [][]byte, s *discordgo.Session, guildID, channelID string) 
 	vc.Speaking(true)
 
 	// Send the buffer data.
-	for i := 0; i < 10; i++ {
+outer:
+	for {
 		for _, buff := range buffer {
 			vc.OpusSend <- buff
-			if <-stoploop {
-				break
+			select {
+			case <-stoploop:
+				fmt.Println("loop function received stop signal")
+				break outer
+			default:
+				continue
 			}
 		}
-
 	}
-
 	// Stop speaking
 	vc.Speaking(false)
 
@@ -302,6 +193,13 @@ func MSGlistener(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
+	if strings.HasPrefix(m.Content, "!stop") {
+		fmt.Println("stop signal received")
+		stoploop <- true
+		return
+
+	}
+
 	for _, SoundOption := range sounds.sound {
 
 		// check if the message is "!fard"
@@ -319,7 +217,6 @@ func MSGlistener(s *discordgo.Session, m *discordgo.MessageCreate) {
 			// Find the guild for that channel.
 			g, err := s.State.Guild(c.GuildID)
 
-			fmt.Println(g)
 			if err != nil {
 				// Could not find guild.
 				fmt.Println(err)
@@ -346,9 +243,15 @@ func voicefard() {
 
 				for _, vs := range info.guildID.VoiceStates {
 					if vs.UserID == info.author.Author.ID {
-						err := playSound(SoundOption.buffer, info.s, info.guildID.ID, vs.ChannelID)
 						fmt.Println("playing sound in " + vs.ChannelID)
-						check(err)
+						if SoundOption.loop == true {
+							err := playLoop(SoundOption.buffer, info.s, info.guildID.ID, vs.ChannelID)
+							check(err)
+						} else {
+							err := playSound(SoundOption.buffer, info.s, info.guildID.ID, vs.ChannelID)
+							check(err)
+						}
+
 					}
 
 				}
@@ -358,9 +261,10 @@ func voicefard() {
 	}
 }
 
-func (sc *soundcollection) LoadSound(path string, trigger string) {
+func (sc *soundcollection) LoadSound(path string, trigger string, loop bool) {
 
 	var dca sound
+	dca.loop = loop
 	dca.trigger = trigger
 	file, err := os.Open(path)
 	if err != nil {
@@ -458,5 +362,23 @@ func check(e error) {
 	if e != nil {
 		fmt.Println("Error loading sound: ", e)
 		return
+	}
+}
+
+// This function will be called (due to AddHandler above) every time a new
+// guild is joined.
+func guildCreate(s *discordgo.Session, event *discordgo.GuildCreate) {
+
+	if event.Guild.Unavailable {
+		return
+	}
+
+	for _, channel := range event.Guild.Channels {
+		if channel.ID == event.Guild.ID {
+			if *&devmode == false {
+				_, _ = s.ChannelMessageSend(channel.ID, "fardbot is ready! Type !fard while in a voice channel to play THE sound.")
+			}
+			return
+		}
 	}
 }
