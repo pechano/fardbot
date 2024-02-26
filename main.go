@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"os/signal"
 	"strings"
@@ -31,11 +32,18 @@ var stoploop chan bool
 type soundcollection struct {
 	sound []sound
 }
+type soundType int
+
+const (
+	soundbite soundType = iota
+	loop
+	oneHour
+)
 
 type sound struct {
-	trigger string
-	buffer  [][]byte
-	loop    bool
+	trigger   string
+	buffer    [][]byte
+	soundtype soundType
 }
 
 type channelinfo struct {
@@ -53,9 +61,11 @@ func main() {
 	playsoundchannel = make(chan channelinfo)
 	stoploop = make(chan bool)
 
-	sounds.LoadSound("fard.dca", "!fard", false)
-	sounds.LoadSound("bowel.dca", "!bowel", false)
-	sounds.LoadSound("toilet.dca", "!toilet", true)
+	sounds.LoadSound("fard.dca", "!fard", soundbite)
+	sounds.LoadSound("bowel.dca", "!bowel", soundbite)
+	sounds.LoadSound("toilet.dca", "!toilet", loop)
+	sounds.LoadSound("metal.dca", "!1hourmetalpipe", oneHour)
+	sounds.LoadSound("fard.dca", "!1hourfard", oneHour)
 
 	devmode = true
 
@@ -179,6 +189,53 @@ outer:
 	return nil
 }
 
+func oneHourSilence(buffer [][]byte, s *discordgo.Session, guildID, channelID string) (err error) {
+	oneHourStart := time.Now()
+	fmt.Println("onehour function reporting in")
+	// Join the provided voice channel.
+	vc, err := s.ChannelVoiceJoin(guildID, channelID, false, true)
+	if err != nil {
+		return err
+	}
+
+	// Sleep for a specified amount of time before playing the sound
+	time.Sleep(250 * time.Millisecond)
+
+	// Start speaking.
+	vc.Speaking(true)
+
+	// Send the buffer data.
+outer:
+	for {
+		fmt.Printf("Playing first sound after %v seconds \n", time.Since(oneHourStart).Seconds())
+		for _, buff := range buffer {
+			vc.OpusSend <- buff
+			select {
+			case <-stoploop:
+				fmt.Println("onehour function received stop signal")
+				break outer
+			default:
+				continue
+			}
+		}
+		if time.Since(oneHourStart) > 60*time.Minute {
+			break outer
+		}
+		waitTimer := rand.Intn(60)
+		time.Sleep(time.Duration(waitTimer) * time.Second)
+	}
+	// Stop speaking
+	vc.Speaking(false)
+
+	// Sleep for a specificed amount of time before ending.
+	time.Sleep(250 * time.Millisecond)
+
+	// Disconnect from the provided voice channel.
+	vc.Disconnect()
+
+	return nil
+}
+
 func countdown(keepalive chan string, stopchannel chan string) {
 	timeLeft := 25 * time.Second
 	<-keepalive
@@ -244,27 +301,32 @@ func voicefard() {
 				for _, vs := range info.guildID.VoiceStates {
 					if vs.UserID == info.author.Author.ID {
 						fmt.Println("playing sound in " + vs.ChannelID)
-						if SoundOption.loop == true {
+
+						switch SoundOption.soundtype {
+
+						case loop:
 							err := playLoop(SoundOption.buffer, info.s, info.guildID.ID, vs.ChannelID)
 							check(err)
-						} else {
+						case soundbite:
 							err := playSound(SoundOption.buffer, info.s, info.guildID.ID, vs.ChannelID)
+							check(err)
+						case oneHour:
+							err := oneHourSilence(SoundOption.buffer, info.s, info.guildID.ID, vs.ChannelID)
 							check(err)
 						}
 
 					}
-
 				}
 			}
-		}
 
+		}
 	}
 }
 
-func (sc *soundcollection) LoadSound(path string, trigger string, loop bool) {
+func (sc *soundcollection) LoadSound(path string, trigger string, soundType soundType) {
 
 	var dca sound
-	dca.loop = loop
+	dca.soundtype = soundType
 	dca.trigger = trigger
 	file, err := os.Open(path)
 	if err != nil {
