@@ -41,9 +41,10 @@ const (
 )
 
 type sound struct {
-	trigger   string
-	buffer    [][]byte
-	soundtype soundType
+	trigger     string
+	buffer      [][]byte
+	soundtype   soundType
+	description string
 }
 
 type channelinfo struct {
@@ -207,7 +208,7 @@ func oneHourSilence(buffer [][]byte, s *discordgo.Session, guildID, channelID st
 	// Send the buffer data.
 outer:
 	for {
-		fmt.Printf("Playing first sound after %v seconds \n", time.Since(oneHourStart).Seconds())
+		fmt.Printf("Playing sound after %v seconds \n", time.Since(oneHourStart).Seconds())
 		for _, buff := range buffer {
 			vc.OpusSend <- buff
 			select {
@@ -257,6 +258,24 @@ func MSGlistener(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	}
 
+	if strings.HasPrefix(m.Content, "+magik") {
+
+		fmt.Println(m.Attachments[0].Filename)
+		fmt.Println(m.Attachments[0].URL)
+		magikFile := magik(m.Attachments[0].Filename, m.Attachments[0].URL)
+		fmt.Println(magikFile)
+		reader, err := os.Open(magikFile)
+		if err != nil {
+			// Could not find channel.
+			fmt.Println(err)
+			return
+		}
+
+		s.ChannelMessageSend(m.ChannelID, "adding some MAGIK:")
+		s.ChannelFileSend(m.ChannelID, magikFile, reader)
+		os.Remove(magikFile)
+		return
+	}
 	for _, SoundOption := range sounds.sound {
 
 		// check if the message is "!fard"
