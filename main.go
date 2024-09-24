@@ -251,19 +251,31 @@ func MSGlistener(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
+	if strings.HasPrefix(m.Content, "!commands") {
+
+		s.ChannelMessageSend(m.ChannelID, "Available commands are: **!commands** (posts this message), **!fard** (joins voice channel and does one reverb fard), **!bowel** (joins voice channel and does a tremendous bowel moevement), **!toilet** (starts a perpetual loop of toilet ambiance), **!1hourmetalpipe** (joins voice channel and drops a metal pipe every minute for one hour), **!1hourfard** (joins voice channel and lets out a reverb fard every minute for one hour).")
+		s.ChannelMessageSend(m.ChannelID, "Available image commands are: **+magik** (performs magik on an image), **+flip** (flips an image(_not funny_)). __**Image commands must be given in a reply message to the post containing the image or nothing will happen.**__")
+
+		return
+	}
+
 	if strings.HasPrefix(m.Content, "!stop") {
 		fmt.Println("stop signal received")
 		stoploop <- true
 		return
-
 	}
 
 	if strings.HasPrefix(m.Content, "+magik") {
 
-		fmt.Println(m.Attachments[0].Filename)
-		fmt.Println(m.Attachments[0].URL)
-		magikFile := magik(m.Attachments[0].Filename, m.Attachments[0].URL)
-		fmt.Println(magikFile)
+		if m.Type != discordgo.MessageTypeReply {
+			return
+		}
+
+		if len(m.ReferencedMessage.Attachments) == 0 {
+			return
+		}
+
+		magikFile := magik(m)
 		reader, err := os.Open(magikFile)
 		if err != nil {
 			// Could not find channel.
@@ -276,6 +288,31 @@ func MSGlistener(s *discordgo.Session, m *discordgo.MessageCreate) {
 		os.Remove(magikFile)
 		return
 	}
+
+	if strings.HasPrefix(m.Content, "+flip") {
+		if m.Type != discordgo.MessageTypeReply {
+			return
+		}
+		if len(m.ReferencedMessage.Attachments) == 0 {
+			return
+		}
+
+		flipFile := flip(m)
+		reader, err := os.Open(flipFile)
+		if err != nil {
+			// Could not find channel.
+			fmt.Println("reader failed to open")
+			fmt.Println(err)
+			return
+		}
+
+		s.ChannelMessageSend(m.ChannelID, "testing some FLip")
+		s.ChannelFileSend(m.ChannelID, flipFile, reader)
+		os.Remove(flipFile)
+
+		return
+	}
+
 	for _, SoundOption := range sounds.sound {
 
 		// check if the message is "!fard"
