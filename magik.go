@@ -67,6 +67,48 @@ func flip(m *discordgo.MessageCreate) (flipPath string) {
 	return flipPath
 
 }
+
+func deepfry(m *discordgo.MessageCreate) (fryPath string) {
+
+	imgPath := m.ReferencedMessage.Attachments[0].Filename
+	url := m.ReferencedMessage.Attachments[0].ProxyURL
+	defer os.Remove(imgPath)
+	fmt.Println("deepfryin' " + imgPath)
+	err := downloadFile(imgPath, url)
+	if err != nil {
+		fmt.Println(err)
+		fmt.Println("downlaod command failed")
+	}
+
+	inputfile := strings.TrimSuffix(imgPath, filepath.Ext(imgPath))
+
+	fryPath = inputfile + "fry" + ".jpg"
+	deepfryer := []string{
+		imgPath,
+		"-modulate",
+		"80,200,90",
+		"-sharpen",
+		"0x10",
+		"-sigmoidal-contrast",
+		"5,0%",
+		"-fill",
+		"orange4",
+		"-colorize",
+		"50%",
+		"-quality",
+		"5",
+		fryPath}
+
+	fry := exec.Command("magick", deepfryer...)
+
+	err = fry.Run()
+	if err != nil {
+		fmt.Println(err)
+		fmt.Println("flip command failed")
+	}
+	return fryPath
+}
+
 func downloadFile(filepath string, url string) (err error) {
 
 	// Create the file

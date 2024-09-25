@@ -254,7 +254,7 @@ func MSGlistener(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if strings.HasPrefix(m.Content, "!commands") {
 
 		s.ChannelMessageSend(m.ChannelID, "Available commands are: **!commands** (posts this message), **!fard** (joins voice channel and does one reverb fard), **!bowel** (joins voice channel and does a tremendous bowel moevement), **!toilet** (starts a perpetual loop of toilet ambiance), **!1hourmetalpipe** (joins voice channel and drops a metal pipe every minute for one hour), **!1hourfard** (joins voice channel and lets out a reverb fard every minute for one hour).")
-		s.ChannelMessageSend(m.ChannelID, "Available image commands are: **+magik** (performs magik on an image), **+flip** (flips an image(_not funny_)). __**Image commands must be given in a reply message to the post containing the image or nothing will happen.**__")
+		s.ChannelMessageSend(m.ChannelID, "Available image commands are: **+magik** (performs magik on an image), **+flip** (flips an image(_not funny_)), **+fry** (deepfries an image). __**Image commands must be given in a reply message to the post containing the image or nothing will happen.**__")
 
 		return
 	}
@@ -306,9 +306,32 @@ func MSGlistener(s *discordgo.Session, m *discordgo.MessageCreate) {
 			return
 		}
 
-		s.ChannelMessageSend(m.ChannelID, "testing some FLip")
+		s.ChannelMessageSend(m.ChannelID, "flip xd")
 		s.ChannelFileSend(m.ChannelID, flipFile, reader)
 		os.Remove(flipFile)
+
+		return
+	}
+	if strings.HasPrefix(m.Content, "+fry") {
+		if m.Type != discordgo.MessageTypeReply {
+			return
+		}
+		if len(m.ReferencedMessage.Attachments) == 0 {
+			return
+		}
+
+		fryFile := deepfry(m)
+		reader, err := os.Open(fryFile)
+		if err != nil {
+			// Could not find channel.
+			fmt.Println("reader failed to open")
+			fmt.Println(err)
+			return
+		}
+
+		s.ChannelMessageSend(m.ChannelID, "deepfryin'")
+		s.ChannelFileSend(m.ChannelID, fryFile, reader)
+		os.Remove(fryFile)
 
 		return
 	}
