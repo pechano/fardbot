@@ -3,11 +3,13 @@ package main
 import (
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/hahnicity/go-wget"
@@ -111,21 +113,21 @@ func deepfry(m *discordgo.MessageCreate) (fryPath string) {
 func sponge(m *discordgo.MessageCreate) (spongePath string) {
 
 	imgPath := "spongebase.jpg"
-	mockString := m.Content
-	mockString = "'" + mockString + "'"
+	mockString := m.ReferencedMessage.Content
+	mockString = spongify(mockString)
 
 	fmt.Println("creating best argument")
 
 	inputfile := strings.TrimSuffix(imgPath, filepath.Ext(imgPath))
 
-	mockPath := inputfile + "mock" + ".jpg"
+	mockPath := inputfile + "mock" + fmt.Sprint(rand.Int()) + ".jpg"
 	spongemock := []string{
-		inputfile,
+		imgPath,
 		"-size",
 		"200x50",
 		"-font",
 		"Impact",
-		"pointsize",
+		"-pointsize",
 		"160",
 		"-fill",
 		"white",
@@ -133,7 +135,7 @@ func sponge(m *discordgo.MessageCreate) (spongePath string) {
 		"south",
 		"-stroke",
 		"black",
-		"strokewidth",
+		"-strokewidth",
 		"5",
 		"-annotate",
 		"+25+70",
@@ -142,9 +144,9 @@ func sponge(m *discordgo.MessageCreate) (spongePath string) {
 		"+repage",
 		mockPath}
 
-	fry := exec.Command("magick", spongemock...)
+	fry, err := exec.Command("magick", spongemock...).CombinedOutput()
+	fmt.Println(string(fry))
 
-	err := fry.Run()
 	if err != nil {
 		fmt.Println(err)
 		fmt.Println("sponge command failed")
@@ -152,6 +154,24 @@ func sponge(m *discordgo.MessageCreate) (spongePath string) {
 	return mockPath
 }
 
+func spongify(input string) (output string) {
+	unicodeString := []rune(input)
+
+	for i := 0; i < len(input); i++ {
+
+		if i%2 == 0 {
+			unicodeString[i] = unicode.ToUpper(unicodeString[i])
+		}
+	}
+	output = string(unicodeString)
+	if len(input) > 40 {
+
+		index := 40
+		output = output[:index] + "\n" + output[index:]
+	}
+
+	return output
+}
 func downloadFile(filepath string, url string) (err error) {
 
 	// Create the file
