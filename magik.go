@@ -108,6 +108,49 @@ func deepfry(m *discordgo.MessageCreate) (fryPath string) {
 	}
 	return fryPath
 }
+func sponge(m *discordgo.MessageCreate) (spongePath string) {
+
+	imgPath := "spongebase.jpg"
+	mockString := m.Content
+	mockString = "'" + mockString + "'"
+
+	fmt.Println("creating best argument")
+
+	inputfile := strings.TrimSuffix(imgPath, filepath.Ext(imgPath))
+
+	mockPath := inputfile + "mock" + ".jpg"
+	spongemock := []string{
+		inputfile,
+		"-size",
+		"200x50",
+		"-font",
+		"Impact",
+		"pointsize",
+		"160",
+		"-fill",
+		"white",
+		"-gravity",
+		"south",
+		"-stroke",
+		"black",
+		"strokewidth",
+		"5",
+		"-annotate",
+		"+25+70",
+		mockString,
+		"-trim",
+		"+repage",
+		mockPath}
+
+	fry := exec.Command("magick", spongemock...)
+
+	err := fry.Run()
+	if err != nil {
+		fmt.Println(err)
+		fmt.Println("sponge command failed")
+	}
+	return mockPath
+}
 
 func downloadFile(filepath string, url string) (err error) {
 

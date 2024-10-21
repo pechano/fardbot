@@ -335,6 +335,29 @@ func MSGlistener(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 		return
 	}
+	if strings.HasPrefix(m.Content, "+sponge") {
+		if m.Type != discordgo.MessageTypeReply {
+			return
+		}
+		if len(m.ReferencedMessage.Content) == 0 {
+			return
+		}
+
+		mockfile := sponge(m)
+		reader, err := os.Open(mockfile)
+		if err != nil {
+			// Could not find channel.
+			fmt.Println("reader failed to open")
+			fmt.Println(err)
+			return
+		}
+
+		s.ChannelMessageSend(m.ChannelID, "creating best argument")
+		s.ChannelFileSend(m.ChannelID, mockfile, reader)
+		os.Remove(mockfile)
+
+		return
+	}
 
 	for _, SoundOption := range sounds.sound {
 
