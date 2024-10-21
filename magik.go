@@ -115,6 +115,7 @@ func sponge(m *discordgo.MessageCreate) (spongePath string) {
 	imgPath := "spongebase.jpg"
 	mockString := m.ReferencedMessage.Content
 	mockString = spongify(mockString)
+	fmt.Println(mockString)
 
 	fmt.Println("creating best argument")
 
@@ -153,25 +154,38 @@ func sponge(m *discordgo.MessageCreate) (spongePath string) {
 	}
 	return mockPath
 }
-
 func spongify(input string) (output string) {
 	unicodeString := []rune(input)
 
-	for i := 0; i < len(input); i++ {
+	for i := 1; i <= len(unicodeString)-1; i++ {
 
 		if i%2 == 0 {
 			unicodeString[i] = unicode.ToUpper(unicodeString[i])
 		}
 	}
-	output = string(unicodeString)
-	if len(input) > 40 {
+	var mixedCaseWithNewlines []rune
+	newline := []rune("\n")
 
-		index := 40
-		output = output[:index] + "\n" + output[index:]
+	if len(unicodeString) < 40 {
+		output = string(unicodeString)
+		return output
 	}
 
+	if len(unicodeString) > 40 {
+		for i := 1; i <= len(unicodeString)-1; i++ {
+			if i%40 == 0 {
+
+				mixedCaseWithNewlines = append(mixedCaseWithNewlines, unicodeString[i-40:i]...)
+
+				mixedCaseWithNewlines = append(mixedCaseWithNewlines, newline...)
+			}
+		}
+	}
+	output = string(mixedCaseWithNewlines)
 	return output
+
 }
+
 func downloadFile(filepath string, url string) (err error) {
 
 	// Create the file
