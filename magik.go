@@ -154,6 +154,7 @@ func sponge(m *discordgo.MessageCreate) (spongePath string) {
 	}
 	return mockPath
 }
+
 func spongify(input string) (output string) {
 	unicodeString := []rune(input)
 
@@ -166,6 +167,7 @@ func spongify(input string) (output string) {
 	var mixedCaseWithNewlines []rune
 	newline := []rune("\n")
 
+	finalIndex := 0
 	if len(unicodeString) < 40 {
 		output = string(unicodeString)
 		return output
@@ -178,9 +180,12 @@ func spongify(input string) (output string) {
 				mixedCaseWithNewlines = append(mixedCaseWithNewlines, unicodeString[i-40:i]...)
 
 				mixedCaseWithNewlines = append(mixedCaseWithNewlines, newline...)
+				finalIndex = i
 			}
 		}
+		mixedCaseWithNewlines = append(mixedCaseWithNewlines, unicodeString[finalIndex:]...)
 	}
+	fmt.Println(finalIndex)
 	output = string(mixedCaseWithNewlines)
 	return output
 
