@@ -1,4 +1,4 @@
-package main
+package magik
 
 import (
 	"fmt"
@@ -15,7 +15,7 @@ import (
 	"github.com/hahnicity/go-wget"
 )
 
-func magik(m *discordgo.MessageCreate) (magikPath string) {
+func Magick(m *discordgo.MessageCreate) (magikPath string) {
 	imgPath := m.ReferencedMessage.Attachments[0].Filename
 	url := m.ReferencedMessage.Attachments[0].ProxyURL
 
@@ -25,7 +25,7 @@ func magik(m *discordgo.MessageCreate) (magikPath string) {
 	inputfile := strings.TrimSuffix(imgPath, filepath.Ext(imgPath))
 	tempFile := inputfile + "temp" + filepath.Ext(imgPath)
 
-	magikPath = inputfile + "magik" + filepath.Ext(imgPath)
+	magikPath = inputfile + "magikold" + filepath.Ext(imgPath)
 
 	upscale := exec.Command("magick", imgPath, "-liquid-rescale", "200%", tempFile)
 	err := upscale.Run()
@@ -44,7 +44,7 @@ func magik(m *discordgo.MessageCreate) (magikPath string) {
 
 }
 
-func flip(m *discordgo.MessageCreate) (flipPath string) {
+func FlipImg(m *discordgo.MessageCreate) (flipPath string) {
 
 	imgPath := m.ReferencedMessage.Attachments[0].Filename
 	url := m.ReferencedMessage.Attachments[0].ProxyURL
@@ -70,7 +70,7 @@ func flip(m *discordgo.MessageCreate) (flipPath string) {
 
 }
 
-func deepfry(m *discordgo.MessageCreate) (fryPath string) {
+func Deepfry(m *discordgo.MessageCreate) (fryPath string) {
 
 	imgPath := m.ReferencedMessage.Attachments[0].Filename
 	url := m.ReferencedMessage.Attachments[0].ProxyURL
@@ -110,7 +110,7 @@ func deepfry(m *discordgo.MessageCreate) (fryPath string) {
 	}
 	return fryPath
 }
-func sponge(m *discordgo.MessageCreate) (spongePath string) {
+func Sponge(m *discordgo.MessageCreate) (spongePath string) {
 
 	imgPath := "spongebase.jpg"
 	mockString := m.ReferencedMessage.Content

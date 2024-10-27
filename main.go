@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/binary"
+	"fardbot/magik"
 	"flag"
 	"fmt"
+	"github.com/bwmarrin/discordgo"
 	"io"
 	"math/rand"
 	"os"
@@ -11,8 +13,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"github.com/bwmarrin/discordgo"
 )
 
 func init() {
@@ -275,7 +275,7 @@ func MSGlistener(s *discordgo.Session, m *discordgo.MessageCreate) {
 			return
 		}
 
-		magikFile := magik(m)
+		magikFile := magik.Magick(m)
 		reader, err := os.Open(magikFile)
 		if err != nil {
 			// Could not find channel.
@@ -297,7 +297,7 @@ func MSGlistener(s *discordgo.Session, m *discordgo.MessageCreate) {
 			return
 		}
 
-		flipFile := flip(m)
+		flipFile := magik.FlipImg(m)
 		reader, err := os.Open(flipFile)
 		if err != nil {
 			// Could not find channel.
@@ -320,7 +320,7 @@ func MSGlistener(s *discordgo.Session, m *discordgo.MessageCreate) {
 			return
 		}
 
-		fryFile := deepfry(m)
+		fryFile := magik.Deepfry(m)
 		reader, err := os.Open(fryFile)
 		if err != nil {
 			// Could not find channel.
@@ -343,7 +343,7 @@ func MSGlistener(s *discordgo.Session, m *discordgo.MessageCreate) {
 			return
 		}
 
-		mockfile := sponge(m)
+		mockfile := magik.Sponge(m)
 		reader, err := os.Open(mockfile)
 		if err != nil {
 			// Could not find channel.
@@ -533,13 +533,13 @@ func check(e error) {
 // guild is joined.
 func guildCreate(s *discordgo.Session, event *discordgo.GuildCreate) {
 
-	if event.Guild.Unavailable {
+	if event.Unavailable {
 		return
 	}
 
-	for _, channel := range event.Guild.Channels {
-		if channel.ID == event.Guild.ID {
-			if *&devmode == false {
+	for _, channel := range event.Channels {
+		if channel.ID == event.ID {
+			if !devmode {
 				_, _ = s.ChannelMessageSend(channel.ID, "fardbot is ready! Type !fard while in a voice channel to play THE sound.")
 			}
 			return
